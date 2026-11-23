@@ -13,7 +13,6 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -58,19 +57,21 @@ class MainActivity : ComponentActivity(), SharedPreferences.OnSharedPreferenceCh
     private var resumed = false
     private var pendingStart = false
 
-    private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { allowed ->
-        if (allowed) requestNotifications() else {
-            startPending = false
-            error = "Allow microphone access to enable wirefree."
-        }
-    }
-    private val callPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { allowed ->
-        canDetectCalls = allowed
-    }
     private var canDetectCalls by mutableStateOf(false)
 
-    private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-        queueStart()
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<String>, grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        when (requestCode) {
+            MIC_REQUEST -> if (granted) requestNotifications() else {
+                startPending = false
+                error = "Allow microphone access to enable wirefree."
+            }
+            CALL_REQUEST -> canDetectCalls = granted
+            NOTIFICATION_REQUEST -> queueStart()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -99,7 +100,7 @@ class MainActivity : ComponentActivity(), SharedPreferences.OnSharedPreferenceCh
                                 ControlScreen(laptop, status, muted, startPending, error,
                                     { settings.muted = !settings.muted }, ::setEnabled, { forget = true })
                                 if (!canDetectCalls && packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY)) {
-                                    TextButton(onClick = { callPermission.launch(Manifest.permission.READ_PHONE_STATE) },
+                                    TextButton(onClick = { requestPermissions(arrayOf(Manifest.permission.READ_PHONE_STATE), CALL_REQUEST) },
                                         modifier = Modifier.heightIn(min = 48.dp),
                                         contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp)) {
                                         Text("Detect phone calls")
@@ -121,7 +122,7 @@ class MainActivity : ComponentActivity(), SharedPreferences.OnSharedPreferenceCh
                 if (batteryPrompt) AlertDialog(onDismissRequest = { batteryPrompt = false },
                     title = { Text("Keep audio connected") },
                     text = { Text("Allow wirefree to keep its connection when the screen is off. " +
-                        "The microphone still opens only when the laptop requests it and you’re unmuted.") },
+                        "The microphone still opens only when the laptop requests it and youâ€™re unmuted.") },
                     confirmButton = { TextButton(onClick = {
                         batteryPrompt = false
                         runCatching { startActivity(Intent(ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
@@ -194,7 +195,7 @@ class MainActivity : ComponentActivity(), SharedPreferences.OnSharedPreferenceCh
             settings.save(pairing)
             setEnabled(true)
         } catch (_: Exception) {
-            error = "Couldn’t save the pairing. Try again."
+            error = "Couldnâ€™t save the pairing. Try again."
         } finally {
             pairing.key.fill(0)
         }
@@ -215,7 +216,7 @@ class MainActivity : ComponentActivity(), SharedPreferences.OnSharedPreferenceCh
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             requestNotifications()
         } else if (resumed) {
-            micPermission.launch(Manifest.permission.RECORD_AUDIO)
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), MIC_REQUEST)
         } else {
             queueStart()
         }
@@ -225,7 +226,7 @@ class MainActivity : ComponentActivity(), SharedPreferences.OnSharedPreferenceCh
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED && !settings.prefs.getBoolean("askedNotifications", false)) {
             settings.prefs.edit().putBoolean("askedNotifications", true).apply()
-            notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFICATION_REQUEST)
         } else queueStart()
     }
 
@@ -237,7 +238,7 @@ class MainActivity : ComponentActivity(), SharedPreferences.OnSharedPreferenceCh
     private fun startConnection() {
         pendingStart = false
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            micPermission.launch(Manifest.permission.RECORD_AUDIO)
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), MIC_REQUEST)
             return
         }
         settings.enabled = true
@@ -251,12 +252,16 @@ class MainActivity : ComponentActivity(), SharedPreferences.OnSharedPreferenceCh
             }
         } catch (_: RuntimeException) {
             settings.enabled = false
-            error = "Couldn’t start wirefree. Turn the connection on again."
+            error = "Couldnâ€™t start wirefree. Turn the connection on again."
         } finally {
             startPending = false
         }
     }
 }
+
+private const val MIC_REQUEST = 1
+private const val CALL_REQUEST = 2
+private const val NOTIFICATION_REQUEST = 3
 
 private val lightColors = lightColorScheme(
     primary = Color(0xFF12645F), onPrimary = Color.White,
@@ -308,7 +313,7 @@ private fun PairScreen(scanning: Boolean, error: String?, scan: () -> Unit, pair
         color = MaterialTheme.colorScheme.onSurfaceVariant)
     Spacer(Modifier.height(32.dp))
     Button(onClick = scan, enabled = !scanning, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-        Text(if (scanning) "Opening scanner…" else "Scan pairing code")
+        Text(if (scanning) "Opening scannerâ€¦" else "Scan pairing code")
     }
     if (!showPaste) {
         TextButton(onClick = { showPaste = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
@@ -350,8 +355,8 @@ private fun ControlScreen(
     }
     Text(when {
         !status.online -> "Laptop audio route unavailable"
-        status.earpods -> "Laptop audio → EarPods"
-        else -> "EarPods not connected · laptop uses its own speaker"
+        status.earpods -> "Laptop audio â†’ EarPods"
+        else -> "EarPods not connected Â· laptop uses its own speaker"
     }, fontWeight = FontWeight.Medium)
     Spacer(Modifier.height(6.dp))
     Text("Mic: ${if (muted) "muted" else status.mic ?: "off"}", color = colors.onSurfaceVariant)

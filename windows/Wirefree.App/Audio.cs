@@ -31,7 +31,7 @@ internal sealed class Audio(Link link) : IDisposable
             {
                 try
                 {
-                    var next = new WasapiLoopbackCapture(speaker);
+                    var next = new LowLatencyLoopback(speaker);
                     capture = next;
                     var streamer = new SpeakerEncoder(link, next.WaveFormat);
                     next.DataAvailable += (_, args) => streamer.Push(args.Buffer, args.BytesRecorded);
@@ -100,12 +100,12 @@ internal sealed class Audio(Link link) : IDisposable
 
 internal sealed class SpeakerEncoder : IDisposable
 {
-    private const int Samples = 960;
+    private const int Samples = 480; // 10 ms frames for the speaker stream
     private const float Floor = 0.00031622777f;
     private readonly Link link;
     private readonly BufferedWaveProvider raw;
     private readonly ISampleProvider audio;
-    private readonly IOpusEncoder encoder = OpusCodecFactory.CreateEncoder(48000, 2, OpusApplication.OPUS_APPLICATION_AUDIO);
+    private readonly IOpusEncoder encoder = OpusCodecFactory.CreateEncoder(48000, 2, OpusApplication.OPUS_APPLICATION_RESTRICTED_LOWDELAY);
     private readonly float[] frame = new float[Samples * 2];
     private readonly byte[] opus = new byte[1154];
     private int filled, quiet;
@@ -113,7 +113,7 @@ internal sealed class SpeakerEncoder : IDisposable
     public SpeakerEncoder(Link link, WaveFormat format)
     {
         this.link = link;
-        encoder.Bitrate = 128000;
+        encoder.Bitrate = 510000; // Opus maximum
         encoder.UseInbandFEC = true;
         encoder.PacketLossPercent = 10;
         raw = new BufferedWaveProvider(format) { ReadFully = false };
@@ -217,4 +217,10 @@ internal sealed class MicProvider : IWaveProvider, IDisposable
         stopping.Dispose();
         decoder.Dispose();
     }
+}
+
+// NAudio's WasapiLoopbackCapture polls a 100 ms buffer every 50 ms; a 20 ms buffer polls every 10 ms.
+internal sealed class LowLatencyLoopback(MMDevice device) : WasapiCapture(device, false, 20)
+{
+    protected override AudioClientStreamFlags GetAudioClientStreamFlags() => AudioClientStreamFlags.Loopback;
 }

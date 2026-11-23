@@ -71,7 +71,7 @@ Each side starts its own session by sending HELLO first, and keeps sending HELLO
 | 0x01 | HELLO  | both | UTF-8 JSON, see below |
 | 0x02 | CMD    | both | UTF-8 JSON `{"cmd":"mute"\|"unmute"\|"toggleMute"}` |
 | 0x10 | MIC    | phone→laptop | `seq u32` + one Opus packet (48 kHz, mono, 20 ms) |
-| 0x11 | SPK    | laptop→phone | `seq u32` + one Opus packet (48 kHz, stereo, 20 ms) |
+| 0x11 | SPK    | laptop→phone | `seq u32` + one Opus packet (48 kHz, stereo, 10 ms) |
 
 ### HELLO, phone → laptop (every 1 s, and right away on any change)
 
@@ -100,9 +100,9 @@ The laptop tray can send `toggleMute`. The phone applies it and confirms with an
 
 - Opus through Concentus on both sides (Java: `io.github.jaredmdobson:concentus`, C#: `Concentus` on NuGet), so the encoder and decoder behave the same.
 - MIC: 48 kHz mono, 20 ms frames, VOIP application, 32 kbps, in-band FEC on, expected packet loss 10%.
-- SPK: 48 kHz stereo, 20 ms frames, AUDIO application, 128 kbps, FEC on.
+- SPK: 48 kHz stereo, 10 ms frames, RESTRICTED_LOWDELAY application, 510 kbps (the Opus maximum), FEC on.
 - Silence: while the source is digitally silent (peak < -70 dBFS for 200 ms), the sender sends nothing. The receiver plays silence through the gap.
-- Jitter buffer on the receiver: 60 ms target, 200 ms max. Late packets are dropped. A missing packet is concealed with the decoder's PLC, or with FEC when the next packet is already there. Order comes from `seq`.
+- Jitter buffer on the receiver: SPK 40 ms target, 300 ms window; MIC 60 ms target, 200 ms max. Late packets are dropped. A missing packet is concealed with the decoder's PLC, or with FEC when the next packet is already there. Order comes from `seq`.
 
 ## Liveness
 

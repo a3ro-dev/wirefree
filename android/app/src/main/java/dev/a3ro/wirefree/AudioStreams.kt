@@ -71,14 +71,15 @@ internal class MicStream @SuppressLint("MissingPermission") constructor(val devi
 
 internal class SpeakerStream(val device: AudioDeviceInfo) : AutoCloseable {
     private val decoder = OpusDecoder(RATE, 2)
-    private val pcm = ShortArray(FRAME * 2)
+    private val pcm = ShortArray(SPK_FRAME * 2)
     private val track = AudioTrack.Builder()
         .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
         .setAudioFormat(format(AudioFormat.CHANNEL_OUT_STEREO))
-        .setBufferSizeInBytes(maxOf(FRAME * 4 * 10, AudioTrack.getMinBufferSize(
+        .setBufferSizeInBytes(maxOf(SPK_FRAME * 4 * 8, AudioTrack.getMinBufferSize(
             RATE, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT)))
         .setTransferMode(AudioTrack.MODE_STREAM)
+        .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
         .build()
     private var offset = 0
     private var pending = 0
@@ -86,7 +87,7 @@ internal class SpeakerStream(val device: AudioDeviceInfo) : AutoCloseable {
     private var hasRouted = false
 
     init {
-        if (Build.VERSION.SDK_INT >= 31) track.startThresholdInFrames = FRAME * 3
+        if (Build.VERSION.SDK_INT >= 31) track.startThresholdInFrames = SPK_FRAME * 2
         if (!track.setPreferredDevice(device)) {
             track.release()
             error("Headset route unavailable")
@@ -107,15 +108,15 @@ internal class SpeakerStream(val device: AudioDeviceInfo) : AutoCloseable {
             pcm.fill(0)
             val decoded = when (frame) {
                 is JitterBuffer.Frame.Packet -> runCatching {
-                    require(OpusPacketInfo.getNumSamples(frame.opus, 0, frame.opus.size, RATE) == FRAME)
-                    decoder.decode(frame.opus, 0, frame.opus.size, pcm, 0, FRAME, frame.fec)
-                }.getOrElse { decoder.decode(null, 0, 0, pcm, 0, FRAME, false) }
-                JitterBuffer.Frame.Missing -> decoder.decode(null, 0, 0, pcm, 0, FRAME, false)
-                JitterBuffer.Frame.Silence -> FRAME
+                    require(OpusPacketInfo.getNumSamples(frame.opus, 0, frame.opus.size, RATE) == SPK_FRAME)
+                    decoder.decode(frame.opus, 0, frame.opus.size, pcm, 0, SPK_FRAME, frame.fec)
+                }.getOrElse { decoder.decode(null, 0, 0, pcm, 0, SPK_FRAME, false) }
+                JitterBuffer.Frame.Missing -> decoder.decode(null, 0, 0, pcm, 0, SPK_FRAME, false)
+                JitterBuffer.Frame.Silence -> SPK_FRAME
             }
-            if (decoded in 1..FRAME) {
+            if (decoded in 1..SPK_FRAME) {
                 offset = 0
-                pending = FRAME * 2
+                pending = SPK_FRAME * 2
             }
         }
         if (pending > 0) {

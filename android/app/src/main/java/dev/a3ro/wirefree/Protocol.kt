@@ -17,6 +17,9 @@ internal const val COUNTER_LIMIT = 1L shl 62
 internal const val RATE = 48_000
 internal const val FRAME = 960
 internal const val FRAME_MS = 20L
+// Speaker stream: 10 ms frames for lower latency (mic stays at 20 ms).
+internal const val SPK_FRAME = 480
+internal const val SPK_MS = 10L
 
 internal enum class Kind(val id: Byte) { HELLO(1), CMD(2), MIC(16), SPK(17) }
 internal enum class Direction(val label: String) { PHONE("p2l"), LAPTOP("l2p") }
@@ -155,7 +158,7 @@ internal class JitterBuffer {
     fun offer(frame: AudioFrame, now: Long) {
         if (due == Long.MIN_VALUE || (missing >= 3 && packets.isEmpty())) {
             next = frame.seq
-            due = now + 5 * FRAME_MS
+            due = now + 4 * SPK_MS
             started = false
             missing = 0
         }
@@ -164,7 +167,7 @@ internal class JitterBuffer {
         if (distance < 0 && !started && distance >= -3 &&
             packets.keys.all { it - frame.seq < 10 }) {
             next = frame.seq
-        } else if (distance !in 0..14) {
+        } else if (distance !in 0..29) {
             return
         }
         packets.putIfAbsent(frame.seq, frame.opus)
@@ -172,14 +175,14 @@ internal class JitterBuffer {
 
     fun poll(now: Long): Frame? {
         if (due == Long.MIN_VALUE || now < due) return null
-        if (now - due >= 10 * FRAME_MS) {
+        if (now - due >= 10 * SPK_MS) {
             // Skip elapsed playout slots after a scheduler stall.
-            next += ((now - due) / FRAME_MS).toInt()
+            next += ((now - due) / SPK_MS).toInt()
             packets.keys.removeAll { it - next < 0 }
             due = now
         }
         started = true
-        due += FRAME_MS
+        due += SPK_MS
         val packet = packets.remove(next++)
         if (packet != null) {
             missing = 0

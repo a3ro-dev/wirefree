@@ -7,7 +7,7 @@ namespace Wirefree.Protocol;
 
 public enum PacketType : byte { Hello = 1, Command = 2, Mic = 0x10, Speaker = 0x11 }
 
-public sealed record Packet(PacketType Type, byte[] Payload, bool NewSession);
+public sealed record Packet(PacketType Type, byte[] Payload, bool NewSession, ulong Counter);
 
 public static class PacketCodec
 {
@@ -119,7 +119,7 @@ public sealed class PacketReceiver(byte[] secret, bool phoneToLaptop) : IDisposa
             replay.Reset();
         }
 
-        return replay.Accept(counter) ? new Packet(type, plaintext, newSession) : null;
+        return replay.Accept(counter) ? new Packet(type, plaintext, newSession, counter) : null;
     }
 
     private static bool TryTimestamp(byte[] payload, out long timestamp)

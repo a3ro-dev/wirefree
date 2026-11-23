@@ -120,3 +120,8 @@ The laptop tray can send `toggleMute`. The phone applies it and confirms with an
 
 "User's original" means the defaults saved before wirefree first changed them. They are saved to disk, so a crash still restores them on the next start.
 If the user picks a different default device by hand, wirefree adopts it as the new "original" and doesn't fight them.
+
+## Known limits (v1)
+
+- **Receiver restart.** A receiver that restarts loses `currentSessionTs`, so a HELLO captured in the last 120 s could reopen an old session. Capturing one requires being a node on your own tailnet, because Tailscale encrypts everything on the wire. A challenge-response session start is planned for v2.
+- **Reordering.** Each side ignores a HELLO older than the newest one it has seen, and only moves the reply address on a higher counter, so a late packet can't roll back mute/busy state or the route.

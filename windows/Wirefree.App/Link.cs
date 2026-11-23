@@ -24,6 +24,7 @@ internal sealed class Link : IDisposable
     private IPEndPoint? peer;
     private Phone? phone;
     private long lastPhone;
+    private long peerCtr = -1, helloCtr = -1; // reordered UDP must not roll back the address or the phone state
     private long lastHello;
     private long helloTs;
     private bool wantMic, wantSpk, dirty = true;
@@ -76,7 +77,12 @@ internal sealed class Link : IDisposable
                 {
                     var packet = receiver.Receive(item.Buffer, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                     if (packet is null) continue;
-                    peer = item.RemoteEndPoint;
+                    if (packet.NewSession) peerCtr = helloCtr = -1;
+                    if ((long)packet.Counter > peerCtr)
+                    {
+                        peer = item.RemoteEndPoint;
+                        peerCtr = (long)packet.Counter;
+                    }
                     if (packet.NewSession)
                     {
                         phone = null;
@@ -86,7 +92,8 @@ internal sealed class Link : IDisposable
                     if (packet.Type == PacketType.Hello)
                     {
                         var state = ParseHello(packet.Payload);
-                        if (state is null) continue;
+                        if (state is null || (long)packet.Counter < helloCtr) continue;
+                        helloCtr = (long)packet.Counter;
                         if (!Online || phone!.Muted != state.Muted || phone.Busy != state.Busy ||
                             phone.MicLive != state.MicLive)
                             ResetMic();

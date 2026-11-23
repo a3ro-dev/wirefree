@@ -29,12 +29,14 @@ Check: the Tailscale app on each device should list the other one as connected.
 ## 2. The laptop app
 
 1. Download `wirefree-windows.zip` from the [latest release](https://github.com/a3ro-dev/wirefree/releases/latest), extract it somewhere permanent (for example `C:\Users\<you>\wirefree`) and run `wirefree.exe`.
-2. Click **Set up audio devices** in the window (or run `wirefree.exe --setup`). Approve the admin prompt.
-   This installs two free, signed virtual audio cables from VB-Audio (VB-CABLE and Hi-Fi Cable) straight from vb-audio.com, and renames them so Windows shows:
+2. Click **Set up audio devices** in the window (or run `wirefree.exe --setup`), and approve the admin prompt.
+   It downloads two free, signed virtual audio cables straight from vb-audio.com (VB-CABLE and Hi-Fi Cable). Before running anything, it checks each download's fingerprint and VB-Audio's signature.
+   - VB-CABLE installs by itself.
+   - Hi-Fi Cable opens its own installer window. Click **Install**, wait for *Installation Complete*, and close it.
+3. **Restart Windows**, then click **Set up audio devices** once more. This second run renames the cables (Windows only shows them after the restart), so Sound settings shows:
    - Output: **android-speaker**
    - Input: **android-mic**
    - plus two helper devices called *wirefree speaker link* and *wirefree mic link*. Leave those alone.
-3. **Restart Windows** when it asks (the drivers need it).
 4. wirefree starts with Windows and lives in the tray. Open it and you'll see a pairing QR code.
 
 > VB-Audio's cables are donationware. They're free to use, and you can support the author at vb-audio.com.

@@ -1,0 +1,133 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          validate-wrappers: true
+          # Never write a cache entry from a signing build.
+          cache-read-only: true
+      - name: Write signing config
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -eu
+          : "${KEYSTORE_B64:?ANDROID_KEYSTORE_B64 secret is not set}"
+          : "${STORE_PASSWORD:?ANDROID_KEYSTORE_PASSWORD secret is not set}"
+          : "${KEY_ALIAS:?ANDROID_KEY_ALIAS secret is not set}"
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          {
+            printf 'storeFile=%s\n' "$RUNNER_TEMP/release.jks"
+            printf 'storePassword=%s\n' "$STORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$KEY_ALIAS"
+            printf 'keyPassword=%s\n' "${KEY_PASSWORD:-$STORE_PASSWORD}"
+          } > keystore.properties
+      - run: chmod +x gradlew
+      - run: ./gradlew test assembleRelease --stacktrace
+      - name: Collect and verify APK
+        run: |
+          set -eu
+          apk=$(find app/build/outputs/apk/release -name '*.apk' ! -name '*unsigned*' | head -n1)
+          [ -n "$apk" ] || { echo "no signed release APK produced"; exit 1; }
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n1)
+          "$apksigner" verify --print-certs "$apk"
+          mkdir -p "$RUNNER_TEMP/out"
+          cp "$apk" "$RUNNER_TEMP/out/wirefree.apk"
+      - name: Remove signing material
+        if: always()
+        run: rm -f keystore.properties "$RUNNER_TEMP/release.jks"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android
+          path: ${{ runner.temp }}/out/wirefree.apk
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 8.0.x
+      - name: Test and publish
+        working-directory: windows
+        shell: pwsh
+        run: |
+          dotnet test -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./build.ps1
+      - name: Zip dist and setup scripts
+        working-directory: windows
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP 'wirefree-windows'
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item dist/* $stage -Recurse
+          Copy-Item setup/*.ps1 $stage
+          if (-not (Test-Path (Join-Path $stage '*.exe'))) { throw 'no exe in dist' }
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $env:RUNNER_TEMP 'wirefree-windows.zip')
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows
+          path: ${{ runner.temp }}/wirefree-windows.zip
+          if-no-files-found: error
+
+  release:
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          cd assets
+          sha256sum wirefree.apk wirefree-windows.zip | tee SHA256SUMS.txt
+          {
+            echo "Setup guide: https://github.com/$REPO/blob/$TAG/docs/SETUP.md"
+            echo
+            echo '- `wirefree.apk`: Android app'
+            echo '- `wirefree-windows.zip`: Windows tray app plus setup scripts'
+            echo '- `SHA256SUMS.txt`: verify with `sha256sum -c SHA256SUMS.txt`'
+          } > "$RUNNER_TEMP/notes.md"
+          flags=""
+          case "$TAG" in *-*) flags="--prerelease" ;; esac
+          # shellcheck disable=SC2086
+          gh release create "$TAG" --repo "$REPO" --verify-tag --title "$TAG" $flags \
+            --notes-file "$RUNNER_TEMP/notes.md" --generate-notes \
+            wirefree.apk wirefree-windows.zip SHA256SUMS.txt

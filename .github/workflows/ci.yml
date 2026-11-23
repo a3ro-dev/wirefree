@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Bootstrap guard: skip a platform job until its project exists.
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      android: ${{ steps.d.outputs.android }}
+      windows: ${{ steps.d.outputs.windows }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            android
+            windows
+      - id: d
+        run: |
+          [ -f android/app/build.gradle.kts ] && a=true || a=false
+          [ -f windows/build.ps1 ] && w=true || w=false
+          echo "android=$a" >> "$GITHUB_OUTPUT"
+          echo "windows=$w" >> "$GITHUB_OUTPUT"
+
+  android:
+    needs: detect
+    if: needs.detect.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # AGP 9.x needs JDK 17 or newer; 21 is the current LTS.
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          # Verifies the wrapper jar against Gradle's published checksums.
+          validate-wrappers: true
+      - run: chmod +x gradlew
+      - run: ./gradlew test assembleDebug --stacktrace
+
+  windows:
+    needs: detect
+    if: needs.detect.outputs.windows == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('windows/**/*.csproj', 'windows/**/Directory.*.props', 'windows/**/packages.lock.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - run: dotnet test -c Release
+      - run: ./build.ps1
+        shell: pwsh

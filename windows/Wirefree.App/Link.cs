@@ -17,6 +17,7 @@ internal sealed class Link : IDisposable
     private readonly CancellationTokenSource stopping = new();
     private readonly UdpClient udp = new(AddressFamily.InterNetworkV6);
     private readonly Task listen;
+    private readonly System.Threading.Timer keepAlive;
     private readonly JitterBuffer jitter = new();
     private PacketSender sender;
     private PacketReceiver receiver;
@@ -45,6 +46,11 @@ internal sealed class Link : IDisposable
         udp.Client.ExclusiveAddressUse = true;
         udp.Client.Bind(new IPEndPoint(IPAddress.IPv6Any, 47391));
         listen = Listen();
+        // Keep-alive on its own timer: the tray's UI timer stalls during slow device lookups.
+        keepAlive = new System.Threading.Timer(_ =>
+        {
+            lock (gate) if (peer is not null && Environment.TickCount64 - lastHello >= 1000) Hello();
+        }, null, 250, 250);
         NetworkChange.NetworkAddressChanged += NetworkChanged;
     }
 
@@ -288,6 +294,7 @@ internal sealed class Link : IDisposable
     public void Dispose()
     {
         NetworkChange.NetworkAddressChanged -= NetworkChanged;
+        keepAlive.Dispose();
         stopping.Cancel();
         udp.Dispose();
         listen.GetAwaiter().GetResult();

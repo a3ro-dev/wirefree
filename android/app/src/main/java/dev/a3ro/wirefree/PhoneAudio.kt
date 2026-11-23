@@ -16,7 +16,7 @@ import android.telephony.TelephonyManager
 internal class PhoneAudio(private val context: Context, private val handler: Handler) : AutoCloseable {
     private val audio = context.getSystemService(AudioManager::class.java)
     private val telephony = context.getSystemService(TelephonyManager::class.java)
-    private var players = audio.activePlaybackConfigurations.count { !isOurs(it.audioAttributes) }
+    private var players = audio.activePlaybackConfigurations.count(::isPlaying)
     private var recordings = audio.activeRecordingConfigurations
     private var inCall = false
     private var unregisterCall: (() -> Unit)? = null
@@ -31,7 +31,7 @@ internal class PhoneAudio(private val context: Context, private val handler: Han
     }
     private val playback = object : AudioManager.AudioPlaybackCallback() {
         override fun onPlaybackConfigChanged(configs: List<AudioPlaybackConfiguration>) {
-            players = configs.count { !isOurs(it.audioAttributes) }
+            players = configs.count(::isPlaying)
         }
     }
     private val recording = object : AudioManager.AudioRecordingCallback() {
@@ -67,7 +67,8 @@ internal class PhoneAudio(private val context: Context, private val handler: Han
             mic?.record?.activeRecordingConfiguration?.isClientSilenced == true ||
                 recordings.any { it.clientAudioSessionId == ownSession && it.isClientSilenced } ->
                 "Android paused microphone access"
-            players > 0 -> "Media is playing on your phone"
+            // The list is anonymized, so our own track can't be told apart: subtract it.
+            players > if (playing) 1 else 0 -> "Media is playing on your phone"
             else -> null
         }
     }
@@ -110,7 +111,6 @@ internal class PhoneAudio(private val context: Context, private val handler: Han
     }
 }
 
-// Our track's capture policy tags it, so phone priority counts only other apps' players.
-internal fun isOurs(a: android.media.AudioAttributes) =
-    a.usage == android.media.AudioAttributes.USAGE_MEDIA &&
-        a.allowedCapturePolicy == android.media.AudioAttributes.ALLOW_CAPTURE_BY_SYSTEM
+// shortcut: the playing state is only exposed through toString ("state:started"); idle system
+// SoundPool players otherwise count as media. Revisit if a future Android changes that format.
+internal fun isPlaying(c: android.media.AudioPlaybackConfiguration) = c.toString().contains("state:started")

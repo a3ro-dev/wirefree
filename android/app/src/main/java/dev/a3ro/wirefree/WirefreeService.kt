@@ -179,7 +179,10 @@ class WirefreeService : Service() {
             var online = online(now)
             var priority = priority(now)
             if (!online || hello?.wantMic != true || muted || priority != null) closeMic()
-            if (!online || hello?.wantSpk != true || audio.output == null || priority != null) closeSpeaker()
+            if (!online || hello?.wantSpk != true || audio.output == null || priority != null) {
+                if (speaker != null) android.util.Log.i("wirefree", "speaker off: online=$online wantSpk=${hello?.wantSpk} out=${audio.output != null} priority=$priority")
+                closeSpeaker()
+            }
             read(now)
             muted = settings.muted
             online = online(now)
@@ -187,6 +190,7 @@ class WirefreeService : Service() {
             updateMic(now, online && hello?.wantMic == true && !muted && priority == null)
             if (!online || hello?.wantSpk != true || audio.output == null || priority != null ||
                 now - lastSpeaker >= 3_000 || (speaker != null && speaker?.device?.id != audio.output?.id)) {
+                if (speaker != null) android.util.Log.i("wirefree", "speaker off(2): online=$online wantSpk=${hello?.wantSpk} priority=$priority idle=${now - lastSpeaker} dev=${speaker?.device?.id}/${audio.output?.id}")
                 closeSpeaker()
             } else if (speaker == null) {
                 speaker = audio.output?.let { runCatching { SpeakerStream(it) }.getOrNull() }
@@ -227,7 +231,8 @@ class WirefreeService : Service() {
             if (speaker != null) {
                 try {
                     speaker?.pump { jitter.poll(now) }
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    android.util.Log.w("wirefree", "speaker failed: $e")
                     closeSpeaker()
                 }
             }
@@ -313,6 +318,7 @@ class WirefreeService : Service() {
                             spkFloor = null
                             closeSpeaker()
                         }
+                        lastHello?.let { if (now - it > 1500) android.util.Log.i("wirefree", "hello gap ${now - it} ms") }
                         lastHello = now
                         if (packet.ctr > helloCtr) {
                             if (!next.wantSpk) spkFloor = packet.ctr

@@ -76,7 +76,7 @@ internal class SpeakerStream(val device: AudioDeviceInfo) : AutoCloseable {
         .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
         .setAudioFormat(format(AudioFormat.CHANNEL_OUT_STEREO))
-        .setBufferSizeInBytes(maxOf(FRAME * 4 * 3, AudioTrack.getMinBufferSize(
+        .setBufferSizeInBytes(maxOf(FRAME * 4 * 10, AudioTrack.getMinBufferSize(
             RATE, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT)))
         .setTransferMode(AudioTrack.MODE_STREAM)
         .build()
@@ -86,14 +86,16 @@ internal class SpeakerStream(val device: AudioDeviceInfo) : AutoCloseable {
     private var hasRouted = false
 
     init {
-        if (Build.VERSION.SDK_INT >= 31) track.startThresholdInFrames = FRAME
+        if (Build.VERSION.SDK_INT >= 31) track.startThresholdInFrames = FRAME * 3
         if (!track.setPreferredDevice(device)) {
             track.release()
             error("Headset route unavailable")
         }
     }
 
-    fun pump(frame: JitterBuffer.Frame?) {
+    // Polls the jitter buffer only once the previous frame is fully written, so no frame is dropped.
+    fun pump(poll: () -> JitterBuffer.Frame?) {
+        val frame = if (pending == 0) poll() else null
         if (!playing && frame != null) track.play()
         val routed = track.routedDevice
         if (routed != null) {
@@ -102,7 +104,6 @@ internal class SpeakerStream(val device: AudioDeviceInfo) : AutoCloseable {
         }
         if (!hasRouted && frame == null) return
         if (frame != null) {
-            if (pending != 0) return
             pcm.fill(0)
             val decoded = when (frame) {
                 is JitterBuffer.Frame.Packet -> runCatching {

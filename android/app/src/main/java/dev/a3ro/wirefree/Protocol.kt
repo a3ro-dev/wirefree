@@ -155,7 +155,7 @@ internal class JitterBuffer {
     fun offer(frame: AudioFrame, now: Long) {
         if (due == Long.MIN_VALUE || (missing >= 3 && packets.isEmpty())) {
             next = frame.seq
-            due = now + 3 * FRAME_MS
+            due = now + 5 * FRAME_MS
             started = false
             missing = 0
         }
@@ -164,7 +164,7 @@ internal class JitterBuffer {
         if (distance < 0 && !started && distance >= -3 &&
             packets.keys.all { it - frame.seq < 10 }) {
             next = frame.seq
-        } else if (distance !in 0..9) {
+        } else if (distance !in 0..14) {
             return
         }
         packets.putIfAbsent(frame.seq, frame.opus)

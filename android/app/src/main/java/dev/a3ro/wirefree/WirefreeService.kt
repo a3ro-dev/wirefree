@@ -186,7 +186,7 @@ class WirefreeService : Service() {
             priority = priority(now)
             updateMic(now, online && hello?.wantMic == true && !muted && priority == null)
             if (!online || hello?.wantSpk != true || audio.output == null || priority != null ||
-                now - lastSpeaker >= 200 || (speaker != null && speaker?.device?.id != audio.output?.id)) {
+                now - lastSpeaker >= 3_000 || (speaker != null && speaker?.device?.id != audio.output?.id)) {
                 closeSpeaker()
             } else if (speaker == null) {
                 speaker = audio.output?.let { runCatching { SpeakerStream(it) }.getOrNull() }
@@ -226,7 +226,7 @@ class WirefreeService : Service() {
             }
             if (speaker != null) {
                 try {
-                    speaker?.pump(jitter.poll(now))
+                    speaker?.pump { jitter.poll(now) }
                 } catch (_: Exception) {
                     closeSpeaker()
                 }

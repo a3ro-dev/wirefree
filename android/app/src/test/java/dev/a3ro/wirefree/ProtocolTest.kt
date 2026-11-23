@@ -81,15 +81,15 @@ class ProtocolTest {
         jitter.offer(AudioFrame(-1, byteArrayOf(2)), 10)
         jitter.offer(AudioFrame(-2, byteArrayOf(1)), 13)
         jitter.offer(AudioFrame(1, byteArrayOf(4)), 14)
-        assertNull(jitter.poll(69))
-        assertArrayEquals(byteArrayOf(1), (jitter.poll(70) as JitterBuffer.Frame.Packet).opus)
-        assertArrayEquals(byteArrayOf(2), (jitter.poll(90) as JitterBuffer.Frame.Packet).opus)
-        jitter.offer(AudioFrame(-1, byteArrayOf(5)), 103)
-        val recovered = jitter.poll(110) as JitterBuffer.Frame.Packet
+        assertNull(jitter.poll(109))
+        assertArrayEquals(byteArrayOf(1), (jitter.poll(110) as JitterBuffer.Frame.Packet).opus)
+        assertArrayEquals(byteArrayOf(2), (jitter.poll(130) as JitterBuffer.Frame.Packet).opus)
+        jitter.offer(AudioFrame(-1, byteArrayOf(5)), 143)
+        val recovered = jitter.poll(150) as JitterBuffer.Frame.Packet
         assertTrue(recovered.fec)
         assertArrayEquals(byteArrayOf(4), recovered.opus)
-        assertFalse((jitter.poll(130) as JitterBuffer.Frame.Packet).fec)
-        assertEquals(JitterBuffer.Frame.Missing, jitter.poll(150))
+        assertFalse((jitter.poll(170) as JitterBuffer.Frame.Packet).fec)
+        assertEquals(JitterBuffer.Frame.Missing, jitter.poll(190))
     }
 
     @Test fun fixedVectorDecryptsAndReproducesExactWireBytes() {

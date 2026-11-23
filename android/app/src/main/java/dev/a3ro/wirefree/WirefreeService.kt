@@ -235,10 +235,15 @@ class WirefreeService : Service() {
         }
 
         private fun priority(now: Long): String? {
-            val reason = audio.priority(mic, lastMicSession, speaker?.playing == true)
-            if (reason == "Android paused microphone access") silencedUntil = now + 750
-            return reason ?: "Android paused microphone access".takeIf { now < silencedUntil }
+            val raw = audio.priority(mic, lastMicSession, speaker?.playing == true)
+            if (raw == "Android paused microphone access") silencedUntil = now + 750
+            val reason = raw ?: "Android paused microphone access".takeIf { now < silencedUntil }
+            // Debounce: a brief blip must not tear down playback (that was the choppiness).
+            if (reason == null) { busySince = 0L; return null }
+            if (busySince == 0L) busySince = now
+            return reason.takeIf { now - busySince >= 600 }
         }
+        private var busySince = 0L
 
         private fun online(now: Long) = lastHello?.let { now - it < 3_000 } == true
 

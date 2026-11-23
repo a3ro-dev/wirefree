@@ -76,7 +76,8 @@ internal class SpeakerStream(val device: AudioDeviceInfo) : AutoCloseable {
     private val pcm = ShortArray(SPK_FRAME * 2)
     private val track = AudioTrack.Builder()
         .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
-            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+            .setAllowedCapturePolicy(AudioAttributes.ALLOW_CAPTURE_BY_SYSTEM).build())
         .setAudioFormat(format(AudioFormat.CHANNEL_OUT_STEREO))
         .setBufferSizeInBytes(maxOf(SPK_FRAME * 4 * 8, AudioTrack.getMinBufferSize(
             RATE, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT)))

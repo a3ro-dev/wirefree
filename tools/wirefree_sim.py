@@ -244,7 +244,8 @@ class AudioSource:
             try:
                 import opuslib
                 from opuslib.api import ctl, encoder
-            except (ImportError, OSError, RuntimeError):
+            except Exception:
+                # opuslib raises a plain Exception when the native library is missing.
                 pass
             else:
                 channels = 2 if laptop else 1

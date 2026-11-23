@@ -1,5 +1,8 @@
+import io
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -118,6 +121,13 @@ class ProtocolTests(unittest.TestCase):
             stats.record(sim.SEQ.pack(sequence) + sim.DUMMY_PREFIX)
         self.assertEqual((stats.count, stats.dummy, stats.reorder), (3, 3, 1))
         self.assertEqual(stats.sequences.highest - stats.first + 1 - stats.count, 1)
+
+    def test_missing_native_opus_falls_back_to_marked_dummy_frames(self):
+        with patch("builtins.__import__", side_effect=Exception("Could not find Opus library.")):
+            with redirect_stdout(io.StringIO()) as output:
+                audio = sim.AudioSource(laptop=False, dummy=False)
+        self.assertIn("non-Opus", output.getvalue())
+        self.assertTrue(audio.frame(0)[sim.SEQ.size:].startswith(sim.DUMMY_PREFIX))
 
 
 if __name__ == "__main__":

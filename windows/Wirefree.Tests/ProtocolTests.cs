@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -126,14 +127,11 @@ public sealed class ProtocolTests
             var packet = Convert.FromHexString(Read("packet", "packetHex", "packet_hex"));
             var key = Convert.FromHexString(Read("k", "kHex", "k_hex", "key", "keyHex", "key_hex"));
             var sid = Convert.FromHexString(Read("sid", "sidHex", "sid_hex"));
-            string plaintext = root.TryGetProperty("plaintext", out var value)
-                ? value.ValueKind == JsonValueKind.String ? value.GetString()! : value.GetRawText()
-                : Encoding.UTF8.GetString(Convert.FromHexString(Read("plaintextHex", "plaintext_hex")));
-            var counter = root.GetProperty("ctr");
+            // docs/test-vector.json stores every field as hex
+            var plaintext = Convert.FromHexString(Read("plaintext"));
+            var counter = BinaryPrimitives.ReadUInt64BigEndian(Convert.FromHexString(Read("ctr")));
             using var aes = new AesGcm(PacketCodec.DeriveKey(key, sid, true), 16);
-            Assert.Equal(packet, PacketCodec.Seal(aes, sid,
-                counter.ValueKind == JsonValueKind.String ? ulong.Parse(counter.GetString()!) : counter.GetUInt64(),
-                PacketType.Hello, Encoding.UTF8.GetBytes(plaintext)));
+            Assert.Equal(packet, PacketCodec.Seal(aes, sid, counter, PacketType.Hello, plaintext));
             return;
         }
     }

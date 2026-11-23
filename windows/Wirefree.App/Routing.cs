@@ -47,8 +47,10 @@ internal sealed class Routing : IMMNotificationClient, IDisposable
         foreach (var device in devices.EnumerateAudioEndPoints(flow, DeviceState.Active))
         {
             var friendly = device.FriendlyName;
-            if (friendly == name || (result is null &&
-                (friendly == original || friendly.StartsWith(original + " (", StringComparison.OrdinalIgnoreCase))))
+            // Windows appends the adapter: "android-speaker (VB-Audio Hi-Fi Cable)".
+            static bool Is(string friendly, string n) =>
+                friendly == n || friendly.StartsWith(n + " (", StringComparison.OrdinalIgnoreCase);
+            if (Is(friendly, name) || (result is null && Is(friendly, original)))
             {
                 result?.Dispose();
                 result = device;
@@ -80,8 +82,7 @@ internal sealed class Routing : IMMNotificationClient, IDisposable
         using var mic = Find(DataFlow.Capture, Mic);
         using var speaker = Find(DataFlow.Render, Speaker);
         using var micLink = Find(DataFlow.Render, MicLink);
-        using var speakerLink = Find(DataFlow.Capture, SpeakerLink);
-        Ready = mic is not null && speaker is not null && micLink is not null && speakerLink is not null;
+        Ready = mic is not null && speaker is not null && micLink is not null;
         WantMic = mic is not null && HasRecordingSession(mic);
         WantSpeaker = false;
         bool routedMic = false;
@@ -100,13 +101,12 @@ internal sealed class Routing : IMMNotificationClient, IDisposable
                 if (phone is not null) overrides.Add(key);
             }
             string? target = flow == DataFlow.Render
-                ? phone is { Earpods: true } && speakerLink is not null ? speaker?.ID : null
+                ? phone is { Earpods: true } ? speaker?.ID : null
                 : micLink is not null ? mic?.ID : null;
             if (phone is null) target = null;
             if (phone is not { Busy: true } && !overrides.Contains(key))
                 actual = Apply(key, actual, target, role);
-            WantSpeaker |= phone is { Earpods: true, Busy: false } && speaker is not null &&
-                speakerLink is not null && flow == DataFlow.Render && actual == speaker.ID;
+            WantSpeaker |= phone is { Earpods: true, Busy: false } && speaker is not null && flow == DataFlow.Render && actual == speaker.ID;
             routedMic |= mic is not null && flow == DataFlow.Capture && actual == mic.ID;
         }
 

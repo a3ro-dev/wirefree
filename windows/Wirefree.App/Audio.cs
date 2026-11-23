@@ -19,7 +19,8 @@ internal sealed class Audio(Link link) : IDisposable
 
     public void Update(Routing routing, Phone? phone)
     {
-        using var speaker = routing.WantSpeaker ? routing.Find(NAudio.CoreAudioApi.DataFlow.Capture, Routing.SpeakerLink) : null;
+        // Loopback on android-speaker itself: Hi-Fi Cable's capture side won't open on Windows 11.
+        using var speaker = routing.WantSpeaker ? routing.Find(NAudio.CoreAudioApi.DataFlow.Render, Routing.Speaker) : null;
         using var mic = routing.WantMic && phone is { Busy: false, Muted: false, MicLive: true }
             ? routing.Find(NAudio.CoreAudioApi.DataFlow.Render, Routing.MicLink) : null;
 
@@ -30,7 +31,7 @@ internal sealed class Audio(Link link) : IDisposable
             {
                 try
                 {
-                    var next = new WasapiCapture(speaker, true, 20);
+                    var next = new WasapiLoopbackCapture(speaker);
                     capture = next;
                     var streamer = new SpeakerEncoder(link, next.WaveFormat);
                     next.DataAvailable += (_, args) => streamer.Push(args.Buffer, args.BytesRecorded);

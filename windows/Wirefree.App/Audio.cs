@@ -100,7 +100,7 @@ internal sealed class Audio(Link link) : IDisposable
 
 internal sealed class SpeakerEncoder : IDisposable
 {
-    private const int Samples = 480; // 10 ms frames for the speaker stream
+    private const int Samples = 960; // 20 ms frames, as the spec says
     private const float Floor = 0.00031622777f;
     private readonly Link link;
     private readonly BufferedWaveProvider raw;

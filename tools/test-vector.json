@@ -1,0 +1,17 @@
+{
+  "K": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "sid": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+  "ctr": 7,
+  "type": 1,
+  "plaintext": "{\"ts\":0}",
+  "nonce": "000000000000000000000007",
+  "aad": "0101a0a1a2a3a4a5a6a7a8a9aaabacadaeaf0000000000000007",
+  "p2l": {
+    "key": "e64a40b8dbb8eb271e12d0c2f9909dfdd5955d0b54ec3df4fe425b71a90de19f",
+    "packet": "0101a0a1a2a3a4a5a6a7a8a9aaabacadaeaf0000000000000007c889c85193969370ecfb91bb168bf42cc9e9f50828cb9815"
+  },
+  "l2p": {
+    "key": "6b90162c8cdb4fbb38a34cbf726d3910261f4481348db2c237b13640cb025b98",
+    "packet": "0101a0a1a2a3a4a5a6a7a8a9aaabacadaeaf00000000000000077c34321d8a6d8128317bc7cad0d549e097a5c312e1dfb50f"
+  }
+}

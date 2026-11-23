@@ -21,13 +21,15 @@ private fun format(channels: Int) = AudioFormat.Builder()
     .build()
 
 internal class MicStream @SuppressLint("MissingPermission") constructor(val device: AudioDeviceInfo) : AutoCloseable {
-    private val encoder = OpusEncoder(RATE, 1, OpusApplication.OPUS_APPLICATION_VOIP).apply {
-        bitrate = 32_000
+    private val encoder = OpusEncoder(RATE, 1, OpusApplication.OPUS_APPLICATION_AUDIO).apply {
+        bitrate = 128_000
         useInbandFEC = true
         packetLossPercent = 10
     }
     val record: AudioRecord = AudioRecord.Builder()
-        .setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+        // EarPods: clean capture, no call processing. Phone mic: keep echo cancelling, it may hear the laptop speakers.
+        .setAudioSource(if (device.type == AudioDeviceInfo.TYPE_BUILTIN_MIC) MediaRecorder.AudioSource.VOICE_COMMUNICATION
+            else MediaRecorder.AudioSource.MIC)
         .setAudioFormat(format(AudioFormat.CHANNEL_IN_MONO))
         .setBufferSizeInBytes(maxOf(FRAME * 4, AudioRecord.getMinBufferSize(
             RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)))

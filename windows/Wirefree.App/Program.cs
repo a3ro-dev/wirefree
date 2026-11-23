@@ -4,10 +4,14 @@ namespace Wirefree;
 
 internal static class Program
 {
+    [System.Runtime.InteropServices.DllImport("winmm.dll", EntryPoint = "timeBeginPeriod")]
+    private static extern uint TimeBeginPeriod(uint period);
+
     [STAThread]
     private static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
+        TimeBeginPeriod(1); // 1 ms timer ticks so the 20 ms mic playout isn't quantised to 15.6 ms
         try
         {
             if (args is ["--setup"] or ["--uninstall-names"])
